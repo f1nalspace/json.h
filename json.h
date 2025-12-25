@@ -175,17 +175,18 @@ json_parse_ex(const void *src, size_t src_size, size_t flags_bitset,
               struct json_parse_result_s *result);
 
 /* Extracts a value and all the data that makes it up into a newly created
- * value. json_extract_value performs 1 call to malloc for the entire encoding.
- */
+ * value. json_extract_value performs 1 call to the allocator for the entire encoding.
+ * Uses the default allocator (malloc). If needed, you can use json_extract_value_ex()
+ * to pass along your custom memory allocator. */
 json_weak struct json_value_s *
 json_extract_value(const struct json_value_s *value);
 
 /* Extracts a value and all the data that makes it up into a newly created
- * value. json_extract_value performs 1 call to alloc_func_ptr for the entire
- * encoding. If alloc_func_ptr is null then malloc is used. */
+ * value. json_extract_value performs 1 call to the allocator for the entire encoding.
+ * If allocator is null then the default allocator (malloc) is used. */
 json_weak struct json_value_s *
 json_extract_value_ex(const struct json_value_s *value,
-                      void *(*alloc_func_ptr)(void *, size_t), void *user_data);
+                      struct json_allocator_s *allocator);
 
 /* Write out a minified JSON utf-8 string. This string is an encoding of the
  * minimal string characters required to still encode the same data.
@@ -2272,7 +2273,7 @@ struct json_extract_result_s {
 };
 
 struct json_value_s *json_extract_value(const struct json_value_s *value) {
-  return json_extract_value_ex(value, json_null, json_null);
+  return json_extract_value_ex(value, json_null);
 }
 
 json_weak struct json_extract_result_s
@@ -2384,6 +2385,7 @@ json_extract_get_value_size(const struct json_value_s *const value) {
 }
 
 struct json_extract_state_s {
+  struct json_allocator_s allocator;
   char *dom;
   char *data;
 };
@@ -2493,9 +2495,7 @@ void json_extract_copy_value(struct json_extract_state_s *const state,
 }
 
 struct json_value_s *json_extract_value_ex(const struct json_value_s *value,
-                                           void *(*alloc_func_ptr)(void *,
-                                                                   size_t),
-                                           void *user_data) {
+                                           struct json_allocator_s *allocator) {
   void *allocation;
   struct json_extract_result_s result;
   struct json_extract_state_s state;
@@ -2506,14 +2506,13 @@ struct json_value_s *json_extract_value_ex(const struct json_value_s *value,
     return json_null;
   }
 
+  state.allocator = json_create_allocator(allocator);
+
   result = json_extract_get_value_size(value);
   total_size = result.dom_size + result.data_size;
 
-  if (json_null == alloc_func_ptr) {
-    allocation = malloc(total_size);
-  } else {
-    allocation = alloc_func_ptr(user_data, total_size);
-  }
+
+  allocation = state.allocator.alloc(total_size, state.allocator.user_data);
 
   state.dom = (char *)allocation;
   state.data = state.dom + result.dom_size;
