@@ -394,7 +394,7 @@ enum json_parse_error_e {
   /* string was malformed! */
   json_parse_error_invalid_string,
 
-  /* a call to malloc, or a user provider allocator, failed. */
+  /* a call to default allocator (malloc), or a user provider allocator, failed. */
   json_parse_error_allocator_failed,
 
   /* the JSON input had unexpected trailing characters that weren't part of the.
