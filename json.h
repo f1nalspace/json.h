@@ -496,7 +496,28 @@ typedef struct json_parse_result_s {
 #define JSON_MAX_RECURSION 1000
 #endif
 
+json_weak JSON_ALLOC_FUNC(json_default_alloc) {
+    if (0 == size) {
+        return json_null;
+    }
+    return malloc(size);
+}
+
+json_weak JSON_FREE_FUNC(json_default_free) {
+    if (json_null == base) {
+        return;
+    }
+    free(base);
+}
+
+static const struct json_allocator_s json_default_allocator = {
+    .alloc = json_default_alloc,
+    .free = json_default_free,
+    .user_data = json_null,
+};
+
 struct json_parse_state_s {
+  struct json_allocator_s allocator;
   const char *src;
   size_t size;
   size_t offset;
@@ -511,6 +532,13 @@ struct json_parse_state_s {
   size_t error;
   size_t recursion;
 };
+
+json_weak struct json_allocator_s json_create_allocator(struct json_allocator_s *custom_allocator) {
+  if (json_null == custom_allocator || json_null == custom_allocator->alloc || json_null == custom_allocator->free) {
+    return json_default_allocator;
+  }
+  return *custom_allocator;
+}
 
 json_weak int json_hexadecimal_digit(const char c);
 int json_hexadecimal_digit(const char c) {
