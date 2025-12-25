@@ -157,19 +157,21 @@ typedef JSON_ALLOC_FUNC(json_alloc_func_t);
 typedef JSON_FREE_FUNC(json_free_func_t);
 
 /* Parse a JSON text file, returning a pointer to the root of the JSON
- * structure. json_parse performs 1 call to malloc for the entire encoding.
- * Returns 0 if an error occurred (malformed JSON input, or malloc failed). */
+ * structure. json_parse performs 1 call to the allocator for the entire encoding.
+ * Returns 0 if an error occurred (malformed JSON input, or allocation failed).
+ * Uses the default allocator (malloc). If needed, you can use json_parse_ex()
+ * to pass along your custom memory allocator. */
 json_weak struct json_value_s *json_parse(const void *src, size_t src_size);
 
 /* Parse a JSON text file, returning a pointer to the root of the JSON
  * structure. json_parse performs 1 call to alloc_func_ptr for the entire
- * encoding. Returns 0 if an error occurred (malformed JSON input, or malloc
+ * encoding. Returns 0 if an error occurred (malformed JSON input, or allocation
  * failed). If an error occurred, the result struct (if not NULL) will explain
- * the type of error, and the location in the input it occurred. If
- * alloc_func_ptr is null then malloc is used. */
+ * the type of error, and the location in the input it occurred.
+ * If allocator is null, the default allocator (malloc) is used instead. */
 json_weak struct json_value_s *
 json_parse_ex(const void *src, size_t src_size, size_t flags_bitset,
-              void *(*alloc_func_ptr)(void *, size_t), void *user_data,
+              struct json_allocator_s *allocator,
               struct json_parse_result_s *result);
 
 /* Extracts a value and all the data that makes it up into a newly created
@@ -2153,8 +2155,7 @@ void json_parse_value(struct json_parse_state_s *state, int is_global_object,
 
 struct json_value_s *
 json_parse_ex(const void *src, size_t src_size, size_t flags_bitset,
-              void *(*alloc_func_ptr)(void *user_data, size_t size),
-              void *user_data, struct json_parse_result_s *result) {
+              struct json_allocator_s *allocator, struct json_parse_result_s *result) {
   struct json_parse_state_s state;
   void *allocation;
   struct json_value_s *value;
@@ -2183,6 +2184,7 @@ json_parse_ex(const void *src, size_t src_size, size_t flags_bitset,
   state.data_size = 0;
   state.flags_bitset = flags_bitset;
   state.recursion = 0;
+  state.allocator = json_create_allocator(allocator);
 
   input_error = json_get_value_size(
       &state, (int)(json_parse_flags_allow_global_object & state.flags_bitset));
@@ -2215,14 +2217,10 @@ json_parse_ex(const void *src, size_t src_size, size_t flags_bitset,
   /* the JSON values). */
   total_size = state.dom_size + state.data_size;
 
-  if (json_null == alloc_func_ptr) {
-    allocation = malloc(total_size);
-  } else {
-    allocation = alloc_func_ptr(user_data, total_size);
-  }
+  allocation = state.allocator.alloc(total_size, state.allocator.user_data);
 
   if (json_null == allocation) {
-    /* malloc failed! */
+    /* allocation failed! */
     if (result) {
       result->error = json_parse_error_allocator_failed;
       result->error_offset = 0;
@@ -2265,8 +2263,7 @@ json_parse_ex(const void *src, size_t src_size, size_t flags_bitset,
 }
 
 struct json_value_s *json_parse(const void *src, size_t src_size) {
-  return json_parse_ex(src, src_size, json_parse_flags_default, json_null,
-                       json_null, json_null);
+  return json_parse_ex(src, src_size, json_parse_flags_default, json_null, json_null);
 }
 
 struct json_extract_result_s {
