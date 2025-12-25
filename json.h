@@ -70,6 +70,7 @@ extern "C" {
 
 struct json_value_s;
 struct json_parse_result_s;
+struct json_allocator_s;
 
 enum json_parse_flags_e {
   json_parse_flags_default = 0,
@@ -144,6 +145,16 @@ enum json_parse_flags_e {
        json_parse_flags_allow_inf_and_nan |
        json_parse_flags_allow_multi_line_strings)
 };
+
+/* a Define for the allocate memory function pointer. */
+#define JSON_ALLOC_FUNC(name) void *name(const size_t size, void *user_data)
+/* a Function pointer for allocating a block of memory */
+typedef JSON_ALLOC_FUNC(json_alloc_func_t);
+
+/* a Define for the free memory function pointer. */
+#define JSON_FREE_FUNC(name) void name(void *base, void *user_data)
+/* a Function pointer for freeing a block of memory */
+typedef JSON_FREE_FUNC(json_free_func_t);
 
 /* Parse a JSON text file, returning a pointer to the root of the JSON
  * structure. json_parse performs 1 call to malloc for the entire encoding.
@@ -337,6 +348,18 @@ typedef struct json_value_ex_s {
   size_t row_no;
 
 } json_value_ex_t;
+
+/* a JSON Allocator function table. */
+typedef struct json_allocator_s {
+    /* Allocate function pointer. */
+    json_alloc_func_t *alloc;
+    /* Free function pointer. */
+    json_free_func_t *free;
+    /* Custom user data pointer. */
+    void *user_data;
+    /* Padding to align struct. */
+    uintptr_t padding;
+} json_allocator_t;
 
 /* a parsing error code. */
 enum json_parse_error_e {
