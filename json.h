@@ -3216,6 +3216,32 @@ void *json_write_minified_ex(const struct json_value_s *value, struct json_alloc
   return data;
 }
 
+json_weak int json_pretty_use_spacing_for_array_elements(const struct json_array_s *array) {
+    if (json_null == array || 0 == array->length) {
+        return 0;
+    }
+    struct json_array_element_s *element;
+    json_type_t first_type = array->start->value->type;
+    json_type_t last_type = first_type;
+    for (element = array->start; json_null != element; element = element->next) {
+        if (element->value->type != first_type) {
+            /* different type, use default spacing behavior */
+            break;
+        }
+        last_type = element->value->type;
+    }
+    if (first_type == last_type) {
+        if (first_type == json_type_number ||
+            first_type == json_type_string ||
+            first_type == json_type_false ||
+            first_type == json_type_true) {
+            /* all element types are simple, ignore any spacing */
+            return 0;
+        }
+    }
+    return 1;
+}
+
 json_weak int json_write_pretty_get_value_size(const struct json_value_s *value,
                                                size_t depth, size_t indent_size,
                                                size_t newline_size,
@@ -3232,16 +3258,22 @@ int json_write_pretty_get_array_size(const struct json_array_s *array,
 
   *size += 1; /* '['. */
 
+  int with_element_spacing = json_pretty_use_spacing_for_array_elements(array);
+
   if (0 < array->length) {
-    /* if we have any elements we need to add a newline after our '['. */
-    *size += newline_size;
+    if (with_element_spacing) {
+      /* if we have any elements we need to add a newline after our '['. */
+      *size += newline_size;
+    }
 
     *size += array->length - 1; /* ','s seperate each element. */
 
     for (element = array->start; json_null != element;
          element = element->next) {
-      /* each element gets an indent. */
-      *size += (depth + 1) * indent_size;
+      if (with_element_spacing) {
+        /* each element gets an indent. */
+        *size += (depth + 1) * indent_size;
+      }
 
       if (json_write_pretty_get_value_size(element->value, depth + 1,
                                            indent_size, newline_size, size)) {
@@ -3249,14 +3281,17 @@ int json_write_pretty_get_array_size(const struct json_array_s *array,
         return 1;
       }
 
-      /* each element gets a newline too. */
-      *size += newline_size;
+      if (with_element_spacing) {
+        /* if we have any elements we need to add a newline after our '['. */
+        *size += newline_size;
+      }
     }
 
-    /* since we wrote out some elements, need to add a newline and indentation.
-     */
-    /* to the trailing ']'. */
-    *size += depth * indent_size;
+    if (with_element_spacing) {
+      /* since we wrote out some elements, need to add a newline and indentation. */
+      /* to the trailing ']'. */
+      *size += depth * indent_size;
+    }
   }
 
   *size += 1; /* ']'. */
@@ -3358,11 +3393,15 @@ char *json_write_pretty_array(const struct json_array_s *array, size_t depth,
   size_t k, m;
   struct json_array_element_s *element;
 
+  int with_element_spacing = json_pretty_use_spacing_for_array_elements(array);
+
   *data++ = '['; /* open the array. */
 
   if (0 < array->length) {
-    for (k = 0; '\0' != newline[k]; k++) {
-      *data++ = newline[k];
+    if (with_element_spacing) {
+      for (k = 0; '\0' != newline[k]; k++) {
+        *data++ = newline[k];
+      }
     }
 
     for (element = array->start; json_null != element;
@@ -3370,14 +3409,18 @@ char *json_write_pretty_array(const struct json_array_s *array, size_t depth,
       if (element != array->start) {
         *data++ = ','; /* ','s seperate each element. */
 
-        for (k = 0; '\0' != newline[k]; k++) {
-          *data++ = newline[k];
+        if (with_element_spacing) {
+          for (k = 0; '\0' != newline[k]; k++) {
+            *data++ = newline[k];
+          }
         }
       }
 
-      for (k = 0; k < depth + 1; k++) {
-        for (m = 0; '\0' != indent[m]; m++) {
-          *data++ = indent[m];
+      if (with_element_spacing) {
+        for (k = 0; k < depth + 1; k++) {
+          for (m = 0; '\0' != indent[m]; m++) {
+            *data++ = indent[m];
+          }
         }
       }
 
@@ -3390,13 +3433,17 @@ char *json_write_pretty_array(const struct json_array_s *array, size_t depth,
       }
     }
 
-    for (k = 0; '\0' != newline[k]; k++) {
-      *data++ = newline[k];
+    if (with_element_spacing) {
+      for (k = 0; '\0' != newline[k]; k++) {
+        *data++ = newline[k];
+      }
     }
 
-    for (k = 0; k < depth; k++) {
-      for (m = 0; '\0' != indent[m]; m++) {
-        *data++ = indent[m];
+    if (with_element_spacing) {
+      for (k = 0; k < depth; k++) {
+        for (m = 0; '\0' != indent[m]; m++) {
+          *data++ = indent[m];
+        }
       }
     }
   }
